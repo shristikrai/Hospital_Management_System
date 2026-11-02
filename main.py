@@ -1,269 +1,210 @@
-import json
+import psycopg
 from patient import Patient
+from patient_repository import (
+    add_patient_to_db,
+    get_patient_by_id,
+    get_all_patients_from_db,
+    update_patient_in_db,
+    delete_patient_from_db                      
+)
 
-DATA_FILE = "data/patients.json"
+def display_patient(patient):
+    print("\n--- Patient Details ---")
+    print(f"Patient ID: {patient['patient_id']}")
+    print(f"Name: {patient['name']}")
+    print(f"Age: {patient['age']}")
+    print(f"Gender: {patient['gender']}")
+    print(f"Condition: {patient['condition']}")
+    print("------------------------")
 
-#store all patients in a list and keep track of the next patient ID
-patients = []
-next_patient_id = 1
+#validate patient name,age,gender and medical condition.
+def get_patient_details():
+    name = input("Enter patient name: ").strip()
+    while not name:
+        print("Name cannot be empty. Please enter a valid name.")
+        name = input("Enter patient name: ").strip()
 
+    age_input = input("Enter patient age: ").strip()
+    while not age_input.isdigit() or not (0 < int(age_input) <= 120):
+        print("Invalid age. Please enter a number between 1 and 120.")
+        age_input = input("Enter patient age: ").strip()
+    age = int(age_input)
 
-#save all patients in JSON file
-def save_patients():
-    with open(DATA_FILE,"w") as file:
-        json.dump(
-            [patient.to_dict() for patient in patients],
-            file,
-            indent=4
-        )
+    gender = input("Enter patient gender (M/F): ").strip().upper()
+    while gender not in ['M', 'F']:
+        print("Invalid gender. Please enter 'M' for Male or 'F' for Female.")
+        gender = input("Enter patient gender (M/F): ").strip().upper()
 
-
-#load patients from JSON file
-def load_patients():
-    global patients
-    global next_patient_id
-    try:
-        with open(DATA_FILE,"r") as file:
-            data = json.load(file)
-            patients = [Patient.from_dict(patient) for patient in data]
-
-        if patients:
-            next_patient_id = max(
-                patient.patient_id for patient in patients
-            ) +1
-        else:
-            next_patient_id = 1
-    except FileNotFoundError:
-        print("Data file not found. Starting with an empty patient list.")
-        patients = []
-        next_patient_id = 1
-
-    except json.JSONDecodeError:
-        print("Error: Failed to decode JSON data. Starting with an empty patient list.")
-        patients = []
-        next_patient_id = 1
-
-
-#Add a new patient
-def add_patient():
-    global next_patient_id
-
-    # Validate name
-    while True:
-        name = input ("Enter patient full name: ").strip()
-
-        if name:
-            break
-        print("Patient name cannot be empty.")
-
-    # Validate age
-    while True:
-        try:
-            age = int(input("Enter patient age: "))
-            if age < 0 or age > 120:
-                print("Please enter an age between 0 and 120.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Age must be a number.")
-
-    # Validate gender
-    while True:
-         gender = input ("Enter gender: ").strip()
-
-         if gender:
-            break
-            print("Gender cannot be empty.")
-
-    # Validate medical condition
-    while True:
+    condition = input("Enter medical condition: ").strip()
+    while not condition:
+        print("Medical condition cannot be empty. Please enter a valid condition.")
         condition = input("Enter medical condition: ").strip()
-        if condition:
-            break
-        print("Medical condition cannot be empty.")
 
-    patient = Patient(
-        next_patient_id,
-        name,
-        age,
-        gender,
-        condition
-    )
+    return Patient(None, name, age, gender, condition)
 
-    patients.append(patient)
-    next_patient_id += 1
-    save_patients()
+#Add a new patient to the PostgreSQL database using the add_patient_to_db function from patient_repository.py
+def add_patient():
+    patient = get_patient_details()     #collect patient details from user input and return a Patient object
+    patient_id = add_patient_to_db(patient)   #insert the patient into the database and return the added patient object with the assigned patient_id         
+    if patient_id is not None:
+        print("\nPatient added successfully.")
+        display_patient(get_patient_by_id(patient_id))  #retrieve the added patient from the database and display its details   
+    else:
+        print("\nFailed to add patient.")
 
-    print("\nPatient added successfully.")
-
-
-#  View patients
+#Retrive and display all patients from PostgreSQL
 def view_patients():
+    patients = get_all_patients_from_db()  #retrieve all patients from the database
+    if patients is None:
+        print("\nFailed to retrieve patients from PostgreSQL.")
+        return
     if not patients:
         print("\nNo patients found.")
         return
+    
+    print(f"\nTotal patients found: {len(patients)}")
     print("\n--- Patient List ---")
 
     for patient in patients:
-        print()
-        patient.display_info()
+        display_patient(patient)  #display each patient's details
 
-        
-# Search patient
+#search for a patient by ID and display its details
 def search_patient():
-    print("\n--- Search Patient ---")
-    print("1. Search by Patient Id")
-    print("2. Search by Patient Name ")
-    choice = input(" Enter your choice : ").strip()
+    try:
+        patient_id = int(input("Enter the patient ID you want to search for: "))
 
-    # Search by Id
-    if choice == "1":
-        try:
-            patient_id = int(input("Enter Patient ID: "))
-        except ValueError:
-            print("Invalid Patient ID. Please enter a number.")
+        if patient_id <= 0:
+            print("Invalid input. Please enter a positive number for the patient ID.")
             return
 
-        for patient in patients:
-            if patient.patient_id == patient_id:
-                print("\n--- Patient Found ---")
-                patient.display_info()
-                return
+        patient = get_patient_by_id(patient_id)
 
-        print("Patient not found.")
+        if patient is not None:
+            print("\n--- Patient Found ---")
+            display_patient(patient)
+        else:
 
-    # Search by name
-    elif choice == "2":
-        name = input(" Enter Patient name: ").strip()
-        if not name:
-            print(" Patient name cannot be Empty. ")
-            return
+            print(f"No patient found with ID: {patient_id}")
+    except ValueError:
+        print("Invalid input. Please enter a valid number for the patient ID.")
+    except Exception as e:
+        print(f"An error occurred while searching for the patient: {e}")
+    
 
-        found = False
-        for patient in patients:
-            if name.lower() in patient.name.lower():
-                print("\n--- Patient Found ---")
-                patient.display_info()
-                found = True
-
-        if not found:
-            print("Patient not found.")
-    else:
-        print("Invalid choice. Please select 1 0r 2.")
-
-
-# Update patient
+#update an existing patient's information in PostgreSQL
 def update_patient():
     try:
-        patient_id = int(input("Enter Patient ID to Update: "))
-    except ValueError:
-        print("Invalid Patient ID. Please enter a number.")
-        return
-
-    for patient in patients:
-        if patient.patient_id == patient_id:
-            print("\nPatient Found:", patient.name)
-            
-            # Get and validate name
-            name = input("Enter new name: ").strip()
-            if not name:
-                print("Name cannot be Empty. ")
-                return
-
-            # Get and validate age
-            try:
-                age = int(input("Enter new age: "))
-            except ValueError:
-                print("Age must be a number.")
-                return
-
-            if age <= 0:
-                print("Age must be greater than 0. ")
-                return
-            
-            # Get and validate gender
-            gender = input("Enter new gender: ").strip()
-            if not gender:
-                print("Gender cannot be Empty. ")
-                return
-
-            # Get and validate condition    
-            condition = input("Enter new condition: ").strip()
-            if not condition:
-                print("Medical condition cannot be Empty.")
-                return
-
-            # Update only after all validations pass
-            patient.update_name(name)
-            patient.update_age(age)
-            patient.update_gender(gender)
-            patient.update_condition(condition)
-
-            # Save changes to JSON
-            save_patients()
-
-            print("\nPatient updated successfully.")
+        patient_id = int(input("Enter the patient ID you want to update: "))
+        if patient_id <= 0:
+            print("Invalid input. Please enter a positive number for the patient ID.")
             return
-    print("\nPatient not found.")
 
+        patient = get_patient_by_id(patient_id)
 
-# Delete patient
+        if patient is not None:
+            print("\n--- Current Patient Details ---")
+            display_patient(patient)
+
+            # Prompt for new details
+            name = input("Enter new name (leave blank to keep current): ").strip() or patient['name']
+            age_input = input("Enter new age (leave blank to keep current): ").strip()
+            age = int(age_input) if age_input else patient['age']
+            if age <= 0 or age > 120:
+                print("Invalid age. Please enter a number between 1 and 120.")
+                return
+            gender = input("Enter new gender (leave blank to keep current): ").strip() or patient['gender']
+            if gender.upper() not in ['M', 'F', 'MALE', 'FEMALE']:
+                print("Invalid gender. Please enter 'M' for Male or 'F' for Female.")
+                return
+            
+            condition = input("Enter new condition (leave blank to keep current): ").strip() or patient['condition']
+
+            # Update the patient in the database
+            updated = update_patient_in_db(patient_id, name, age, gender, condition)
+            if updated:
+                print("\nPatient details updated successfully.")
+                updated_patient = get_patient_by_id(patient_id)
+
+                if updated_patient is not None:
+                    print("\n--- Updated Patient Details ---")
+                    display_patient(updated_patient)
+            else:
+                print("\nFailed to update patient details.")
+
+        else:
+            print(f"No patient found with ID: {patient_id}")
+
+    except ValueError:
+        print("Invalid input. Please enter a valid number for the patient ID or age.")
+    except Exception as e:
+        print(f"An error occurred while updating the patient: {e}")
+
+#Delete an existing patient from PostgreSQL
 def delete_patient():
     try:
-        patient_id = int(input("Enter Patient ID to delete: "))
-    except ValueError:
-        print("Invalid Patient ID. Please enter a number.")
-        return
-
-    for patient in patients:
-        if patient.patient_id == patient_id:
-            print("\n--- Patient Found --- ")
-            patient.display_info()
-
-            confirmation = input("\nAre you sure, you want to delete this patient ? (y/n): ").strip().lower()
-            if confirmation == "y":
-                patients.remove(patient)
-                save_patients()
-                print("Patient deleted successfully.")
-            elif confirmation == "n":
-                print("Deletion cancelled.")
-            else:
-                print("Invalid input. Deletion cancelled.")
+        patient_id = int(input("Enter the patient ID you want to delete: "))
+        if patient_id <= 0:
+            print("Invalid input. Please enter a positive number for the patient ID.")
             return
-    print("\nPatient not found.")
 
-# Load patients from JSON
-load_patients()
+        patient = get_patient_by_id(patient_id)
 
-# Main menu
-while True:
-    print("\n--- Hospital Patient Management System ---")
-    print("1. Add Patient")
-    print("2. View Patients")
-    print("3. Search Patients")
-    print("4. Update Patient")
-    print("5. Delete Patient")
-    print("6. Exit")
+        if patient is None:
+            print(f"No patient found with ID: {patient_id}")
+        else:
+            print("\n--- Patient Details ---")
+            display_patient(patient)
 
-    choice= input("\nEnter your choice: ").strip()
+            confirmation = input("Are you sure you want to delete this patient? (yes/no): ").strip().lower()
+            if confirmation == 'yes':
+                deleted = delete_patient_from_db(patient_id)
+                if deleted:
+                    print("\nPatient deleted successfully.")
+                    remaining_patients = get_patient_by_id(patient_id)
+                    if remaining_patients is None:
+                        print(f"Patient with ID {patient_id} has been removed from the database.")
+                    else:
+                        print(f"Patient with ID {patient_id} still exists in the database.")
+                else:
+                    print("\nFailed to delete patient.")
+            elif confirmation == 'no':
+                print("\nDeletion cancelled.")
+            else:
+                print("\nDeletion cancelled.")
 
-    if choice == "1":
-        add_patient()
+    except ValueError:
+        print("Invalid input. Please enter a valid number for the patient ID.")
+    except Exception as e:
+        print(f"An error occurred while deleting the patient: {e}")
 
-    elif choice == "2":
-       view_patients()
-    elif choice == "3":
-        search_patient()
+#Main menu for Hospital Management System
+def main_menu():
+    while True:
+        print("\n--- Hospital Patient Management System ---")
+        print("1. Add Patient")
+        print("2. View All Patients")
+        print("3. Search Patient by ID")
+        print("4. Update Patient by ID")
+        print("5. Delete Patient by ID")
+        print("6. Exit")
 
-    elif choice == "4":
-        update_patient()
+        choice = input("Enter your choice (1-6): ").strip()
 
-    elif choice == "5":
-        delete_patient()
+        if choice == '1':
+            add_patient()
+        elif choice == '2':
+            view_patients()
+        elif choice == '3':
+            search_patient()
+        elif choice == '4':
+            update_patient()
+        elif choice == '5':
+            delete_patient()
+        elif choice == '6':
+            print("Exiting the program.")
+            break
+        else:
+            print("Invalid choice. Please enter a number between 1 and 6.")
+if __name__ == "__main__":
+    main_menu()
 
-    elif choice == "6":
-        print("Goodbye!")
-        break
-
-    else:
-        print("Invalid choice. Please try again.")

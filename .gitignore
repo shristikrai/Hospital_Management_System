@@ -1,6 +1,36 @@
-__pycache__/
-*.pyc
-.venv/
+#Environment variables and secrets
 .env
-.DS_Store
+.env.*
+!.env.example
+
+#Python virtual environment
+.venv/
+venv/
+env/
+
+#Python cache
+__pycache__/
+*.py[cod]
+
+#Testing cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+#Local patient data
 data/patients.json
+
+#macOS specific files
+.DS_Store
+
+#IDE Settings
+.vscode/
+.idea/
+
+
+#Logs
+*.log
+
+#cache directories
+.cache/
+

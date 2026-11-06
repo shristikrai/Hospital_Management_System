@@ -11,6 +11,7 @@ env/
 #Python cache
 __pycache__/
 *.py[cod]
+*.pyc
 
 #Testing cache
 .pytest_cache/
@@ -34,3 +35,4 @@ data/patients.json
 #cache directories
 .cache/
 
+.streamlit/screts.toml

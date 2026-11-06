@@ -83,29 +83,53 @@ def get_patient_by_id(patient_id):
         return None
 
 
-def update_patient_in_db(patient_id, name, age, gender, condition):
-    """Update an existing patient's information in the PostgreSQL database."""
+
+def update_patient_in_db(patient_id, updates):
+    """Update selected patient fields in PostgreSQL."""
     try:
-        with get_connection() as connection:  #establish a connection to the PostgreSQL database using the get_connection() function from the database module
+        with get_connection() as connection:
             with connection.cursor() as cursor:
-                cursor.execute( #%s placeholders safely pass Python values to SQL and WHERE ensures only the patient with the specified patient_id is updated
-                    """UPDATE patients
-                    SET name = %s, age = %s, gender = %s, condition = %s 
+
+                # Step 1: Retrieve the existing patient
+                cursor.execute(
+                    """
+                    SELECT name, age, gender, condition
+                    FROM patients
+                    WHERE patient_id = %s;
+                    """,
+                    (patient_id,)
+                )
+
+                existing_patient = cursor.fetchone()
+
+                if existing_patient is None:
+                    return False
+
+                # Step 2: Keep existing values for fields not updated
+                name = updates.get("name", existing_patient[0])
+                age = updates.get("age", existing_patient[1])
+                gender = updates.get("gender", existing_patient[2])
+                condition = updates.get("condition", existing_patient[3])
+
+                # Step 3: Update the patient
+                cursor.execute(
+                    """
+                    UPDATE patients
+                    SET name = %s,
+                        age = %s,
+                        gender = %s,
+                        condition = %s
                     WHERE patient_id = %s;
                     """,
                     (name, age, gender, condition, patient_id)
                 )
-                result = cursor.rowcount  #retrieve the number of rows affected by the update operation
-                if result is None or result == 0:
-                    print(f"No patient found with ID: {patient_id}")
-                    return False
 
-                connection.commit()
-                return True
+                return cursor.rowcount > 0
 
     except psycopg.Error as e:
-        print(f"Error updating patient in database: {e}")
-        return False
+        print(f"Error updating patient: {e}")
+        return None
+
 
 def delete_patient_from_db(patient_id):
     """Delete a patient from the PostgreSQL database."""
@@ -130,3 +154,5 @@ def delete_patient_from_db(patient_id):
     except psycopg.Error as e:
         print(f"Error deleting patient from database: {e}")
         return False
+
+

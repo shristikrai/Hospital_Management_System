@@ -1,4 +1,4 @@
-import psycopg
+
 from patient import Patient
 from patient_repository import (
     add_patient_to_db,
